@@ -141,7 +141,7 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <p className="text-white font-medium">{typeof cause === 'string' ? cause : cause.cause}</p>
                     {typeof cause !== 'string' && cause.confidence && (
-                      <span className={`flex-shrink-0 px-2 py-0.5 rounded text-xs font-mono border ${CONFIDENCE_STYLES[cause.confidence] || CONFIDENCE_STYLES.medium}`}>
+                      <span className={`flex-shrink-0 px-2 py-0.5 rounded text-xs font-mono border ${CONFIDENCE_STYLES[cause.confidence as keyof typeof CONFIDENCE_STYLES] || CONFIDENCE_STYLES.medium}`}>
                         {cause.confidence}
                       </span>
                     )}
