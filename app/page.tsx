@@ -1,0 +1,139 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import UploadZone from '@/components/UploadZone';
+import type { Phase1Result } from '@/types/case';
+
+const CASE_TYPES = [
+  { label: 'Profitability Problem', icon: '📉', color: 'border-red-500/20 text-red-400 bg-red-500/5' },
+  { label: 'Market Entry', icon: '🚀', color: 'border-blue-500/20 text-blue-400 bg-blue-500/5' },
+  { label: 'Pricing Strategy', icon: '💰', color: 'border-emerald-500/20 text-emerald-400 bg-emerald-500/5' },
+  { label: 'M&A / Merger', icon: '🤝', color: 'border-purple-500/20 text-purple-400 bg-purple-500/5' },
+  { label: 'Growth Strategy', icon: '📈', color: 'border-amber-500/20 text-amber-400 bg-amber-500/5' },
+];
+
+export default function HomePage() {
+  const router = useRouter();
+  const [error, setError] = useState('');
+
+  const handleUploadComplete = (sessionId: string, phase1: unknown) => {
+    // Store phase1 data in sessionStorage for instant display on the next page
+    sessionStorage.setItem(`case-${sessionId}`, JSON.stringify(phase1));
+    router.push(`/case/${sessionId}`);
+  };
+
+  return (
+    <main className="flex-1 relative overflow-hidden">
+      {/* Background effects */}
+      <div className="absolute inset-0 bg-grid pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-[#c9a84c]/[0.03] rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[500px] h-[400px] bg-[#3b82f6]/[0.03] rounded-full blur-[100px] pointer-events-none" />
+
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 py-20">
+        {/* Logo / Brand */}
+        <div className="animate-fade-in-up mb-12 text-center">
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#c9a84c] to-[#e8d48b] flex items-center justify-center">
+              <svg className="w-5 h-5 text-[#0a0f1e]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <span className="font-mono text-sm text-[#c9a84c] tracking-widest uppercase">CaseCoach AI</span>
+          </div>
+
+          <h1 className="font-heading text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4">
+            <span className="text-white">Crack Any </span>
+            <span className="text-gradient-gold">Case Interview</span>
+          </h1>
+
+          <p className="text-lg text-[#8896ab] max-w-xl mx-auto leading-relaxed">
+            Upload a case brief PDF and receive a structured, McKinsey-grade solution —
+            complete with driver trees, root cause analysis, and strategic recommendations.
+          </p>
+        </div>
+
+        {/* Upload Zone */}
+        <div className="animate-fade-in-up w-full max-w-2xl" style={{ animationDelay: '0.15s' }}>
+          <UploadZone
+            onUploadComplete={handleUploadComplete}
+            onError={(msg) => setError(msg)}
+          />
+        </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="mt-4 px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400 animate-fade-in-up">
+            {error}
+          </div>
+        )}
+
+        {/* Case type chips */}
+        <div className="mt-10 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+          <p className="text-xs font-mono text-[#8896ab]/50 text-center mb-3 uppercase tracking-wider">
+            Supported case types
+          </p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {CASE_TYPES.map((type) => (
+              <span
+                key={type.label}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all duration-200 hover:scale-105 ${type.color}`}
+              >
+                <span>{type.icon}</span>
+                {type.label}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* How it works */}
+        <div className="mt-16 max-w-3xl w-full animate-fade-in-up" style={{ animationDelay: '0.45s' }}>
+          <p className="text-xs font-mono text-[#8896ab]/50 text-center mb-6 uppercase tracking-wider">
+            How it works
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              {
+                step: '01',
+                title: 'Upload PDF',
+                desc: 'Drop your case brief with exhibits, charts, and tables',
+                icon: '📄',
+              },
+              {
+                step: '02',
+                title: 'Answer Questions',
+                desc: 'Respond to AI-generated clarifying questions',
+                icon: '💬',
+              },
+              {
+                step: '03',
+                title: 'Get Solution',
+                desc: 'Receive a structured, partner-ready case solution',
+                icon: '🎯',
+              },
+            ].map((item) => (
+              <div
+                key={item.step}
+                className="group relative px-5 py-5 bg-white/[0.02] border border-white/[0.06] rounded-xl hover:bg-white/[0.04] hover:border-white/[0.1] transition-all duration-300"
+              >
+                <span className="font-mono text-xs text-[#c9a84c]/40 mb-3 block">{item.step}</span>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">{item.icon}</span>
+                  <h3 className="text-white font-medium">{item.title}</h3>
+                </div>
+                <p className="text-sm text-[#8896ab]">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-16 text-center">
+          <p className="text-xs text-[#8896ab]/30 font-mono">
+            Powered by Gemini AI · Built for case interview preparation
+          </p>
+        </div>
+      </div>
+    </main>
+  );
+}
