@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { analyzeCase } from '@/lib/gemini';
+import { storeSession } from '@/lib/sessionStore';
 import { v4 as uuidv4 } from 'uuid';
 
 export const maxDuration = 120; // Allow up to 120s for Gemini processing
@@ -59,8 +60,12 @@ export async function POST(req: NextRequest) {
     // Call Gemini Phase 1
     const phase1 = await analyzeCase(base64PDF);
 
+    // Store in memory for Phase 2 (works even without Supabase)
+    const memorySessionId = uuidv4();
+    storeSession(memorySessionId, file.name, base64PDF, phase1);
+
     // Create session in Supabase
-    let sessionId = uuidv4();
+    let sessionId = memorySessionId;
 
     try {
       const { data: sessionData, error: dbError } = await getSupabaseAdmin()

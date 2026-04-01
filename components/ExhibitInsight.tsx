@@ -7,7 +7,18 @@ interface ExhibitInsightProps {
   exhibit: ExhibitAnalysisType;
 }
 
+/** Safely coerce a value into an array — handles strings, nulls, undefined */
+function toArray(val: unknown): string[] {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string' && val.trim()) return [val];
+  return [];
+}
+
 export default function ExhibitInsight({ exhibit }: ExhibitInsightProps) {
+  const observations = toArray(exhibit.qualitative_observations);
+  const insights = toArray(exhibit.quantitative_insights);
+  const calculations = Array.isArray(exhibit.calculations_performed) ? exhibit.calculations_performed : [];
+
   return (
     <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-5 space-y-4">
       {/* Header */}
@@ -21,11 +32,11 @@ export default function ExhibitInsight({ exhibit }: ExhibitInsightProps) {
       </div>
 
       {/* Qualitative Observations */}
-      {exhibit.qualitative_observations?.length > 0 && (
+      {observations.length > 0 && (
         <div>
           <p className="text-xs font-mono text-[#c9a84c] uppercase tracking-wider mb-2">Qualitative Observations</p>
           <ul className="space-y-1.5">
-            {exhibit.qualitative_observations.map((obs, i) => (
+            {observations.map((obs, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-[#b8c4d6]">
                 <span className="text-[#c9a84c] mt-1 flex-shrink-0">•</span>
                 <span>{obs}</span>
@@ -36,11 +47,11 @@ export default function ExhibitInsight({ exhibit }: ExhibitInsightProps) {
       )}
 
       {/* Quantitative Insights */}
-      {exhibit.quantitative_insights?.length > 0 && (
+      {insights.length > 0 && (
         <div>
           <p className="text-xs font-mono text-emerald-400 uppercase tracking-wider mb-2">Quantitative Insights</p>
           <ul className="space-y-1.5">
-            {exhibit.quantitative_insights.map((insight, i) => (
+            {insights.map((insight, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-[#b8c4d6]">
                 <span className="text-emerald-400 mt-1 flex-shrink-0">▸</span>
                 <span>{insight}</span>
@@ -59,11 +70,11 @@ export default function ExhibitInsight({ exhibit }: ExhibitInsightProps) {
       )}
 
       {/* Calculations */}
-      {exhibit.calculations_performed?.length > 0 && (
+      {calculations.length > 0 && (
         <div>
           <p className="text-xs font-mono text-purple-400 uppercase tracking-wider mb-2">Calculations</p>
           <div className="space-y-3">
-            {exhibit.calculations_performed.map((calc, i) => (
+            {calculations.map((calc, i) => (
               <div key={i} className="bg-white/[0.02] border border-white/[0.04] rounded-lg p-3">
                 <p className="text-sm text-white font-medium mb-1">{calc.what}</p>
                 <p className="text-xs font-mono text-[#8896ab]">{calc.formula}</p>

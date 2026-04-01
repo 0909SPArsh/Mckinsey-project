@@ -3,6 +3,13 @@
 import React, { useState } from 'react';
 import type { DriverTree as DriverTreeType } from '@/types/case';
 
+/** Safely coerce a value into an array */
+function safeArray(val: unknown): string[] {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string' && val.trim()) return [val];
+  return [];
+}
+
 interface DriverTreeProps {
   tree: DriverTreeType;
 }
@@ -85,14 +92,14 @@ export default function DriverTree({ tree }: DriverTreeProps) {
         {/* Level 1 */}
         <div className="relative">
           {/* Horizontal connector */}
-          {tree.level_1.length > 1 && (
+          {safeArray(tree.level_1).length > 1 && (
             <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px bg-white/10" style={{
-              width: `${(tree.level_1.length - 1) * 180}px`,
+              width: `${(safeArray(tree.level_1).length - 1) * 180}px`,
             }} />
           )}
           <div className="flex gap-6 items-start">
-            {tree.level_1.map((driver, i) => {
-              const subDrivers = tree.level_2?.[driver] || [];
+            {safeArray(tree.level_1).map((driver, i) => {
+              const subDrivers = safeArray(tree.level_2?.[driver as keyof typeof tree.level_2]);
               return (
                 <div key={i} className="flex flex-col items-center">
                   {/* Vertical connector from horizontal line */}

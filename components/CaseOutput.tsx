@@ -6,6 +6,13 @@ import SectionCard from './SectionCard';
 import DriverTree from './DriverTree';
 import ExhibitInsight from './ExhibitInsight';
 
+/** Safely coerce a value into an array — handles strings, nulls, undefined */
+function safeArray<T = string>(val: unknown): T[] {
+  if (Array.isArray(val)) return val as T[];
+  if (typeof val === 'string' && val.trim()) return [val] as unknown as T[];
+  return [];
+}
+
 interface CaseOutputProps {
   phase1: Phase1Result;
   solution: Phase2Solution;
@@ -49,7 +56,7 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
           <div>
             <p className="text-xs font-mono text-[#c9a84c] uppercase tracking-wider mb-2">Key Facts</p>
             <ul className="space-y-1.5">
-              {phase1.key_facts?.map((fact, i) => (
+              {safeArray(phase1.key_facts).map((fact, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-[#b8c4d6]">
                   <span className="text-[#c9a84c] mt-0.5 flex-shrink-0">▸</span>
                   <span>{fact}</span>
@@ -89,11 +96,11 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
             </div>
           )}
 
-          {solution.framework_selected?.alternatives_considered?.length > 0 && (
+          {safeArray(solution.framework_selected?.alternatives_considered).length > 0 && (
             <div>
               <p className="text-xs font-mono text-[#8896ab] uppercase tracking-wider mb-2">Alternatives Considered</p>
               <div className="flex flex-wrap gap-2">
-                {solution.framework_selected.alternatives_considered.map((alt, i) => (
+                {safeArray(solution.framework_selected?.alternatives_considered).map((alt, i) => (
                   <span key={i} className="px-2.5 py-1 bg-white/[0.03] border border-white/[0.06] rounded-md text-xs text-[#8896ab]">
                     {alt}
                   </span>
@@ -129,31 +136,37 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
           <div>
             <p className="text-xs font-mono text-red-400 uppercase tracking-wider mb-3">Primary Causes</p>
             <div className="space-y-3">
-              {solution.root_cause_analysis?.primary_causes?.map((cause, i) => (
+              {safeArray(solution.root_cause_analysis?.primary_causes).map((cause: any, i: number) => (
                 <div key={i} className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-4">
                   <div className="flex items-start justify-between gap-3 mb-2">
-                    <p className="text-white font-medium">{cause.cause}</p>
-                    <span className={`flex-shrink-0 px-2 py-0.5 rounded text-xs font-mono border ${CONFIDENCE_STYLES[cause.confidence] || CONFIDENCE_STYLES.medium}`}>
-                      {cause.confidence}
-                    </span>
+                    <p className="text-white font-medium">{typeof cause === 'string' ? cause : cause.cause}</p>
+                    {typeof cause !== 'string' && cause.confidence && (
+                      <span className={`flex-shrink-0 px-2 py-0.5 rounded text-xs font-mono border ${CONFIDENCE_STYLES[cause.confidence] || CONFIDENCE_STYLES.medium}`}>
+                        {cause.confidence}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-sm text-[#8896ab] mb-1">
-                    <span className="text-[#c9a84c]">Evidence:</span> {cause.evidence_from_case}
-                  </p>
-                  <p className="text-xs text-[#8896ab] font-mono">
-                    Driver Tree Node: {cause.driver_tree_node}
-                  </p>
+                  {typeof cause !== 'string' && cause.evidence_from_case && (
+                    <p className="text-sm text-[#8896ab] mb-1">
+                      <span className="text-[#c9a84c]">Evidence:</span> {cause.evidence_from_case}
+                    </p>
+                  )}
+                  {typeof cause !== 'string' && cause.driver_tree_node && (
+                    <p className="text-xs text-[#8896ab] font-mono">
+                      Driver Tree Node: {cause.driver_tree_node}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
           </div>
 
           {/* Secondary causes */}
-          {solution.root_cause_analysis?.secondary_causes?.length > 0 && (
+          {safeArray(solution.root_cause_analysis?.secondary_causes).length > 0 && (
             <div>
               <p className="text-xs font-mono text-amber-400 uppercase tracking-wider mb-2">Secondary Factors</p>
               <ul className="space-y-1">
-                {solution.root_cause_analysis.secondary_causes.map((cause, i) => (
+                {safeArray(solution.root_cause_analysis?.secondary_causes).map((cause, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-[#b8c4d6]">
                     <span className="text-amber-400 mt-0.5">‣</span>
                     <span>{cause}</span>
@@ -164,11 +177,11 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
           )}
 
           {/* Ruled out */}
-          {solution.root_cause_analysis?.ruled_out?.length > 0 && (
+          {safeArray(solution.root_cause_analysis?.ruled_out).length > 0 && (
             <div>
               <p className="text-xs font-mono text-[#8896ab] uppercase tracking-wider mb-2">Ruled Out</p>
               <ul className="space-y-1">
-                {solution.root_cause_analysis.ruled_out.map((item, i) => (
+                {safeArray(solution.root_cause_analysis?.ruled_out).map((item, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-[#8896ab]/70">
                     <span className="mt-0.5">✗</span>
                     <span className="line-through decoration-1">{item}</span>
@@ -181,16 +194,16 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
       </SectionCard>
 
       {/* 5. Exhibit Analysis */}
-      {solution.exhibit_analysis?.length > 0 && (
+      {safeArray(solution.exhibit_analysis).length > 0 && (
         <SectionCard
           id="section-exhibits"
           icon="📊"
           title="Exhibit Analysis"
-          subtitle={`${solution.exhibit_analysis.length} exhibit${solution.exhibit_analysis.length > 1 ? 's' : ''} analyzed`}
+          subtitle={`${safeArray(solution.exhibit_analysis).length} exhibit${safeArray(solution.exhibit_analysis).length > 1 ? 's' : ''} analyzed`}
           accentColor="#06b6d4"
         >
           <div className="space-y-4">
-            {solution.exhibit_analysis.map((exhibit, i) => (
+            {safeArray(solution.exhibit_analysis).map((exhibit: any, i: number) => (
               <ExhibitInsight key={i} exhibit={exhibit} />
             ))}
           </div>
@@ -211,23 +224,25 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
           </div>
 
           {/* Pillars */}
-          {solution.solution?.strategic_pillars?.map((pillar, i) => (
+          {safeArray(solution.solution?.strategic_pillars).map((pillar: any, i: number) => (
             <div key={i} className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-5">
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
                   <h5 className="text-white font-semibold">{pillar.pillar_name}</h5>
                   <p className="text-sm text-[#b8c4d6] mt-1">{pillar.description}</p>
                 </div>
-                <span className={`flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-mono ${TIMEFRAME_STYLES[pillar.timeframe] || 'bg-gray-500/15 text-gray-400'}`}>
-                  {pillar.timeframe}
-                </span>
+                {pillar.timeframe && (
+                  <span className={`flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-mono ${TIMEFRAME_STYLES[pillar.timeframe] || 'bg-gray-500/15 text-gray-400'}`}>
+                    {pillar.timeframe}
+                  </span>
+                )}
               </div>
 
               {/* Actions */}
               <div className="mb-3">
                 <p className="text-xs font-mono text-[#c9a84c] uppercase tracking-wider mb-2">Specific Actions</p>
                 <ul className="space-y-1">
-                  {pillar.specific_actions?.map((action, j) => (
+                  {safeArray(pillar.specific_actions).map((action: string, j: number) => (
                     <li key={j} className="flex items-start gap-2 text-sm text-[#b8c4d6]">
                       <span className="text-[#c9a84c] mt-0.5">→</span>
                       <span>{action}</span>
@@ -256,7 +271,7 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
       </SectionCard>
 
       {/* 7. Quick Wins */}
-      {solution.solution?.quick_wins?.length > 0 && (
+      {safeArray(solution.solution?.quick_wins).length > 0 && (
         <SectionCard
           id="section-quick-wins"
           icon="⚡"
@@ -265,7 +280,7 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
           accentColor="#10b981"
         >
           <div className="space-y-2">
-            {solution.solution.quick_wins.map((win, i) => (
+            {safeArray(solution.solution?.quick_wins).map((win, i) => (
               <div key={i} className="flex items-start gap-3 px-4 py-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
                 <span className="text-emerald-400 mt-0.5 flex-shrink-0">✓</span>
                 <span className="text-[#b8c4d6]">{win}</span>
@@ -276,7 +291,7 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
       )}
 
       {/* 8. Risks & Mitigations */}
-      {solution.solution?.risks_and_mitigations?.length > 0 && (
+      {safeArray(solution.solution?.risks_and_mitigations).length > 0 && (
         <SectionCard
           id="section-risks"
           icon="⚠️"
@@ -284,16 +299,18 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
           accentColor="#f59e0b"
         >
           <div className="space-y-3">
-            {solution.solution.risks_and_mitigations.map((rm, i) => (
+            {safeArray(solution.solution?.risks_and_mitigations).map((rm: any, i: number) => (
               <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="px-4 py-3 bg-red-500/5 border border-red-500/10 rounded-lg">
                   <p className="text-xs font-mono text-red-400 mb-1">Risk</p>
-                  <p className="text-sm text-[#b8c4d6]">{rm.risk}</p>
+                  <p className="text-sm text-[#b8c4d6]">{typeof rm === 'string' ? rm : rm.risk}</p>
                 </div>
-                <div className="px-4 py-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
-                  <p className="text-xs font-mono text-emerald-400 mb-1">Mitigation</p>
-                  <p className="text-sm text-[#b8c4d6]">{rm.mitigation}</p>
-                </div>
+                {typeof rm !== 'string' && rm.mitigation && (
+                  <div className="px-4 py-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
+                    <p className="text-xs font-mono text-emerald-400 mb-1">Mitigation</p>
+                    <p className="text-sm text-[#b8c4d6]">{rm.mitigation}</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -301,7 +318,7 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
       )}
 
       {/* 9. Quantitative Summary */}
-      {solution.quantitative_summary?.key_calculations?.length > 0 && (
+      {safeArray(solution.quantitative_summary?.key_calculations).length > 0 && (
         <SectionCard
           id="section-quant"
           icon="🔢"
@@ -309,26 +326,28 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
           accentColor="#8b5cf6"
         >
           <div className="space-y-4">
-            {solution.quantitative_summary.key_calculations.map((calc, i) => (
+            {safeArray(solution.quantitative_summary?.key_calculations).map((calc: any, i: number) => (
               <div key={i} className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-4">
-                <p className="text-white font-medium mb-2">{calc.label}</p>
-                <div className="font-mono text-sm space-y-1">
-                  <p className="text-[#8896ab]">
-                    <span className="text-purple-400">Formula:</span> {calc.formula}
-                  </p>
-                  <p className="text-[#8896ab]">
-                    <span className="text-blue-400">Working:</span> {calc.working}
-                  </p>
-                  <p className="text-[#c9a84c] text-lg mt-2">= {calc.answer}</p>
-                </div>
+                <p className="text-white font-medium mb-2">{typeof calc === 'string' ? calc : calc.label}</p>
+                {typeof calc !== 'string' && (
+                  <div className="font-mono text-sm space-y-1">
+                    <p className="text-[#8896ab]">
+                      <span className="text-purple-400">Formula:</span> {calc.formula}
+                    </p>
+                    <p className="text-[#8896ab]">
+                      <span className="text-blue-400">Working:</span> {calc.working}
+                    </p>
+                    <p className="text-[#c9a84c] text-lg mt-2">= {calc.answer}</p>
+                  </div>
+                )}
               </div>
             ))}
 
-            {solution.quantitative_summary.sanity_checks?.length > 0 && (
+            {safeArray(solution.quantitative_summary?.sanity_checks).length > 0 && (
               <div>
                 <p className="text-xs font-mono text-emerald-400 uppercase tracking-wider mb-2">Sanity Checks</p>
                 <ul className="space-y-1">
-                  {solution.quantitative_summary.sanity_checks.map((check, i) => (
+                  {safeArray(solution.quantitative_summary?.sanity_checks).map((check, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-[#b8c4d6]">
                       <span className="text-emerald-400 mt-0.5">✓</span>
                       <span>{check}</span>
@@ -354,7 +373,7 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
           <div className="px-5 py-4 bg-gradient-to-br from-[#c9a84c]/10 to-[#c9a84c]/5 border border-[#c9a84c]/15 rounded-xl">
             <p className="text-xs font-mono text-[#c9a84c] uppercase tracking-wider mb-3">Key Takeaways</p>
             <ol className="space-y-2">
-              {solution.closing_recommendation?.three_key_points?.map((point, i) => (
+              {safeArray(solution.closing_recommendation?.three_key_points).map((point, i) => (
                 <li key={i} className="flex items-start gap-3">
                   <span className="w-6 h-6 rounded-full bg-[#c9a84c]/20 flex items-center justify-center flex-shrink-0 text-xs text-[#c9a84c] font-bold">
                     {i + 1}
@@ -366,11 +385,11 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
           </div>
 
           {/* Next steps */}
-          {solution.closing_recommendation?.next_steps?.length > 0 && (
+          {safeArray(solution.closing_recommendation?.next_steps).length > 0 && (
             <div>
               <p className="text-xs font-mono text-blue-400 uppercase tracking-wider mb-2">Immediate Next Steps</p>
               <ul className="space-y-1.5">
-                {solution.closing_recommendation.next_steps.map((step, i) => (
+                {safeArray(solution.closing_recommendation?.next_steps).map((step, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-[#b8c4d6]">
                     <span className="text-blue-400 mt-0.5">→</span>
                     <span>{step}</span>
@@ -381,11 +400,11 @@ export default function CaseOutput({ phase1, solution }: CaseOutputProps) {
           )}
 
           {/* Open questions */}
-          {solution.closing_recommendation?.open_questions?.length > 0 && (
+          {safeArray(solution.closing_recommendation?.open_questions).length > 0 && (
             <div>
               <p className="text-xs font-mono text-[#8896ab] uppercase tracking-wider mb-2">Open Questions for Further Investigation</p>
               <ul className="space-y-1.5">
-                {solution.closing_recommendation.open_questions.map((q, i) => (
+                {safeArray(solution.closing_recommendation?.open_questions).map((q, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-[#8896ab]">
                     <span className="mt-0.5">?</span>
                     <span>{q}</span>
