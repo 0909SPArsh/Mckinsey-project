@@ -2,9 +2,10 @@
 
 import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
+import type { Phase1Result } from '@/types/case';
 
 interface UploadZoneProps {
-  onUploadComplete: (sessionId: string, phase1: unknown) => void;
+  onUploadComplete: (phase1: Phase1Result, pdfBase64: string) => void;
   onError: (error: string) => void;
 }
 
@@ -60,9 +61,15 @@ export default function UploadZone({ onUploadComplete, onError }: UploadZoneProp
         const data = await response.json();
         setProgress(100);
 
+        // Convert file to base64 for Phase 2 later
+        const arrayBuffer = await file.arrayBuffer();
+        const base64 = btoa(
+          new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+        );
+
         // Brief pause to show 100%
         setTimeout(() => {
-          onUploadComplete(data.sessionId, data.phase1);
+          onUploadComplete(data.phase1, base64);
         }, 500);
       } catch (err) {
         setUploading(false);

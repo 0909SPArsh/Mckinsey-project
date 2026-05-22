@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import ClarifyingQA from '@/components/ClarifyingQA';
 import CaseOutput from '@/components/CaseOutput';
@@ -11,43 +11,59 @@ type PageState = 'loading' | 'clarifying' | 'solving' | 'solved' | 'error';
 export default function CasePage() {
   const params = useParams();
   const router = useRouter();
-  const sessionId = params.id as string;
+  const caseId = params.id as string;
 
   const [state, setState] = useState<PageState>('loading');
   const [phase1, setPhase1] = useState<Phase1Result | null>(null);
   const [solution, setSolution] = useState<Phase2Solution | null>(null);
   const [error, setError] = useState('');
 
+  // Store PDF base64 in a ref to avoid re-renders (can be large)
+  const pdfBase64Ref = useRef<string>('');
+
   useEffect(() => {
-    // Try to get phase1 data from sessionStorage (set during upload redirect)
-    const cached = sessionStorage.getItem(`case-${sessionId}`);
-    if (cached) {
+    // Load phase1 and PDF data from sessionStorage
+    const phase1Cached = sessionStorage.getItem(`case-${caseId}-phase1`);
+    const pdfCached = sessionStorage.getItem(`case-${caseId}-pdf`);
+
+    if (phase1Cached && pdfCached) {
       try {
-        const parsed = JSON.parse(cached) as Phase1Result;
+        const parsed = JSON.parse(phase1Cached) as Phase1Result;
         setPhase1(parsed);
+        pdfBase64Ref.current = pdfCached;
         setState('clarifying');
       } catch {
         setError('Failed to load case data. Please re-upload.');
         setState('error');
       }
     } else {
-      // No cached data — show error
       setError('Session not found. Please upload a new case brief.');
       setState('error');
     }
-  }, [sessionId]);
+  }, [caseId]);
 
   const handleClarifyComplete = async (answers: ClarifyingAnswer[]) => {
     setState('solving');
 
     try {
+      // Convert base64 back to a File to send via FormData
+      const binaryString = atob(pdfBase64Ref.current);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const file = new File([blob], 'case.pdf', { type: 'application/pdf' });
+
+      // Build FormData with PDF + phase1 + answers
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('phase1', JSON.stringify(phase1));
+      formData.append('clarifyingAnswers', JSON.stringify(answers));
+
       const response = await fetch('/api/clarify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          clarifyingAnswers: answers,
-        }),
+        body: formData,
       });
 
       if (!response.ok) {

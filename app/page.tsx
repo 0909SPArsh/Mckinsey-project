@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import UploadZone from '@/components/UploadZone';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
+import type { Phase1Result } from '@/types/case';
 
 const CASE_TYPES = [
   { label: 'Profitability Problem', icon: '📉', color: 'border-red-500/20 text-red-400 bg-red-500/5' },
@@ -27,9 +28,15 @@ export default function HomePage() {
     });
   }, []);
 
-  const handleUploadComplete = (sessionId: string, phase1: unknown) => {
-    sessionStorage.setItem(`case-${sessionId}`, JSON.stringify(phase1));
-    router.push(`/case/${sessionId}`);
+  const handleUploadComplete = (phase1: Phase1Result, pdfBase64: string) => {
+    // Generate a client-side ID for the URL
+    const caseId = crypto.randomUUID();
+
+    // Store both phase1 and the PDF base64 in sessionStorage for the case page
+    sessionStorage.setItem(`case-${caseId}-phase1`, JSON.stringify(phase1));
+    sessionStorage.setItem(`case-${caseId}-pdf`, pdfBase64);
+
+    router.push(`/case/${caseId}`);
   };
 
   const handleSignOut = async () => {

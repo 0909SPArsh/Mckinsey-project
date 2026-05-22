@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase';
 import { createClient } from '@/lib/supabase/server';
 import { analyzeCase } from '@/lib/gemini';
-import { storeSession } from '@/lib/sessionStore';
-import { v4 as uuidv4 } from 'uuid';
 
-export const maxDuration = 120; // Allow up to 120s for Gemini processing
+export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
@@ -48,79 +45,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File size must be under 15MB' }, { status: 400 });
     }
 
-    // Read file as buffer
+    // Read file as buffer → base64
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const base64PDF = buffer.toString('base64');
 
-    // Upload to Supabase Storage
-    const fileName = `${uuidv4()}-${file.name}`;
-    let fileUrl = '';
-
-    try {
-      const { data: uploadData, error: uploadError } = await getSupabaseAdmin().storage
-        .from('case-pdfs')
-        .upload(fileName, buffer, {
-          contentType: 'application/pdf',
-          upsert: false,
-        });
-
-      if (uploadError) {
-        console.error('Supabase upload error:', uploadError);
-        // Continue without storage — Gemini analysis still works
-      } else {
-        const { data: urlData } = getSupabaseAdmin().storage
-          .from('case-pdfs')
-          .getPublicUrl(uploadData.path);
-        fileUrl = urlData.publicUrl;
-      }
-    } catch (storageErr) {
-      console.error('Storage error (non-fatal):', storageErr);
-    }
-
     // Call Gemini Phase 1
     const phase1 = await analyzeCase(base64PDF);
 
-    // Store in memory for Phase 2 (works even without Supabase)
-    const memorySessionId = uuidv4();
-    storeSession(memorySessionId, file.name, base64PDF, phase1);
-
-    // Create session in Supabase
-    let sessionId = memorySessionId;
-
-    try {
-      const { data: sessionData, error: dbError } = await getSupabaseAdmin()
-        .from('case_sessions')
-        .insert({
-          id: sessionId,
-          file_name: file.name,
-          file_url: fileUrl,
-          case_type: phase1.case_type,
-          raw_context: phase1,
-          clarifying_questions: phase1.clarifying_questions,
-          status: 'clarifying',
-        })
-        .select()
-        .single();
-
-      if (dbError) {
-        console.error('DB insert error:', dbError);
-        // Continue with local session ID
-      } else if (sessionData) {
-        sessionId = sessionData.id;
-      }
-    } catch (dbErr) {
-      console.error('Database error (non-fatal):', dbErr);
-    }
-
-    return NextResponse.json({
-      sessionId,
-      phase1,
-    });
+    return NextResponse.json({ phase1 });
   } catch (error) {
     console.error('Analyze case error:', error);
 
-    // Only expose user-friendly GeminiUserError messages to the client
     const isGeminiError = error instanceof Error && error.name === 'GeminiUserError';
     const statusCode = isGeminiError && 'statusCode' in error ? (error as { statusCode: number }).statusCode : 500;
     const message = isGeminiError

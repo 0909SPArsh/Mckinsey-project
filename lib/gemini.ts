@@ -1,16 +1,54 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import type { Phase1Result, Phase2Solution, ClarifyingAnswer } from '@/types/case';
 import { parseJsonResponse } from './caseParser';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+// ------------------------------------------------
+// Lazy-initialized model instances
+// ------------------------------------------------
 
-const model = genAI.getGenerativeModel({
-  model: 'gemini-2.5-flash',
-  generationConfig: {
-    temperature: 0.2,
-    maxOutputTokens: 8192,
-  },
-});
+let _phase1Model: GenerativeModel | null = null;
+let _phase2Model: GenerativeModel | null = null;
+
+function getGenAI(): GoogleGenerativeAI {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new GeminiUserError(
+      'Gemini API key is not configured. Please set the GEMINI_API_KEY environment variable.',
+      { statusCode: 500 }
+    );
+  }
+  return new GoogleGenerativeAI(apiKey);
+}
+
+/** Phase 1 model — smaller output, fast analysis */
+function getPhase1Model(): GenerativeModel {
+  if (!_phase1Model) {
+    _phase1Model = getGenAI().getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 16384,
+        responseMimeType: 'application/json',
+      },
+    });
+  }
+  return _phase1Model;
+}
+
+/** Phase 2 model — large output for comprehensive solutions */
+function getPhase2Model(): GenerativeModel {
+  if (!_phase2Model) {
+    _phase2Model = getGenAI().getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 65536,
+        responseMimeType: 'application/json',
+      },
+    });
+  }
+  return _phase2Model;
+}
 
 // ------------------------------------------------
 // Error classification & retry helpers
@@ -90,9 +128,10 @@ function classifyAndThrow(err: unknown): never {
  * Quota exhaustion errors are NOT retried (they won't resolve by waiting seconds).
  */
 async function callWithRetry(
+  model: GenerativeModel,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   parts: any[],
-  maxRetries = 3
+  maxRetries = 2
 ) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -110,7 +149,7 @@ async function callWithRetry(
         !lower.includes('exceeded');
 
       if (isTransientRateLimit && attempt < maxRetries) {
-        // Exponential backoff: 2s, 8s, 32s
+        // Exponential backoff: 2s, 8s
         const delay = Math.pow(4, attempt) * 2000;
         console.warn(`Gemini rate limited (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -295,13 +334,13 @@ export async function analyzeCase(base64PDF: string): Promise<Phase1Result> {
     },
   };
 
-  const result = await callWithRetry([pdfPart, { text: PHASE_1_PROMPT }]);
+  const result = await callWithRetry(getPhase1Model(), [pdfPart, { text: PHASE_1_PROMPT }]);
   const text = result.response.text();
   const parsed = parseJsonResponse<Phase1Result>(text);
 
   if (!parsed) {
     // Retry once with explicit instruction
-    const retry = await callWithRetry([
+    const retry = await callWithRetry(getPhase1Model(), [
       pdfPart,
       { text: PHASE_1_PROMPT + '\n\nCRITICAL: Return ONLY valid JSON. No markdown code fences, no explanation text.' },
     ]);
@@ -328,12 +367,12 @@ export async function solveCaseWithContext(
     },
   };
 
-  const result = await callWithRetry([pdfPart, { text: prompt }]);
+  const result = await callWithRetry(getPhase2Model(), [pdfPart, { text: prompt }]);
   const text = result.response.text();
   const parsed = parseJsonResponse<Phase2Solution>(text);
 
   if (!parsed) {
-    const retry = await callWithRetry([
+    const retry = await callWithRetry(getPhase2Model(), [
       pdfPart,
       { text: prompt + '\n\nCRITICAL: Return ONLY valid JSON. No markdown code fences, no explanation text.' },
     ]);
