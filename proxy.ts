@@ -38,11 +38,9 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/auth/callback');
 
   if (!user && !isPublicPath) {
-    // TODO: Re-enable once Google SSO is fully configured
-    // const url = request.nextUrl.clone();
-    // url.pathname = '/login';
-    // return NextResponse.redirect(url);
-    console.warn('Unauthenticated access to', pathname, '— login redirect disabled while SSO is being configured');
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    return NextResponse.redirect(url);
   }
 
   // If logged-in user tries to visit /login, redirect to home
