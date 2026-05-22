@@ -5,12 +5,126 @@ import { parseJsonResponse } from './caseParser';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 const model = genAI.getGenerativeModel({
-  model: 'gemini-2.0-flash',
+  model: 'gemini-2.0-flash-lite',
   generationConfig: {
     temperature: 0.2,
     maxOutputTokens: 8192,
   },
 });
+
+// ------------------------------------------------
+// Error classification & retry helpers
+// ------------------------------------------------
+
+/** User-friendly error that is safe to display in the UI */
+export class GeminiUserError extends Error {
+  public readonly statusCode: number;
+  public readonly isQuotaError: boolean;
+  public readonly isRateLimit: boolean;
+
+  constructor(
+    message: string,
+    opts: { statusCode?: number; isQuotaError?: boolean; isRateLimit?: boolean } = {}
+  ) {
+    super(message);
+    this.name = 'GeminiUserError';
+    this.statusCode = opts.statusCode ?? 500;
+    this.isQuotaError = opts.isQuotaError ?? false;
+    this.isRateLimit = opts.isRateLimit ?? false;
+  }
+}
+
+function classifyAndThrow(err: unknown): never {
+  const message = err instanceof Error ? err.message : String(err);
+  const lower = message.toLowerCase();
+
+  // Quota exhaustion (free tier limit reached)
+  if (lower.includes('429') && (lower.includes('quota') || lower.includes('exceeded'))) {
+    throw new GeminiUserError(
+      'API quota exceeded. The free tier daily limit has been reached. Please try again tomorrow, or enable billing on your Google Cloud project for higher limits.',
+      { statusCode: 429, isQuotaError: true }
+    );
+  }
+
+  // Transient rate limit (too many requests per minute)
+  if (lower.includes('429') || lower.includes('too many requests') || lower.includes('rate limit')) {
+    throw new GeminiUserError(
+      'Too many requests. Please wait a moment and try again.',
+      { statusCode: 429, isRateLimit: true }
+    );
+  }
+
+  // Model not found
+  if (lower.includes('404') || lower.includes('not found')) {
+    throw new GeminiUserError(
+      'AI model configuration error. Please contact support.',
+      { statusCode: 500 }
+    );
+  }
+
+  // Auth / API key issues
+  if (lower.includes('401') || lower.includes('403') || lower.includes('api key')) {
+    throw new GeminiUserError(
+      'AI service authentication failed. Please check the API key configuration.',
+      { statusCode: 500 }
+    );
+  }
+
+  // Safety / content filters
+  if (lower.includes('safety') || lower.includes('blocked')) {
+    throw new GeminiUserError(
+      'The content was blocked by safety filters. Please try with a different PDF.',
+      { statusCode: 400 }
+    );
+  }
+
+  // Generic fallback
+  throw new GeminiUserError(
+    'An error occurred while processing your case. Please try again.',
+    { statusCode: 500 }
+  );
+}
+
+/**
+ * Call Gemini with automatic retry + exponential backoff for transient 429 errors.
+ * Quota exhaustion errors are NOT retried (they won't resolve by waiting seconds).
+ */
+async function callWithRetry(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  parts: any[],
+  maxRetries = 3
+) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await model.generateContent(parts);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const lower = message.toLowerCase();
+
+      console.error(`[Gemini] Attempt ${attempt + 1}/${maxRetries + 1} failed:`, message.slice(0, 300));
+
+      const isTransientRateLimit =
+        (lower.includes('429') || lower.includes('too many requests')) &&
+        !lower.includes('quota') &&
+        !lower.includes('exceeded');
+
+      if (isTransientRateLimit && attempt < maxRetries) {
+        // Exponential backoff: 2s, 8s, 32s
+        const delay = Math.pow(4, attempt) * 2000;
+        console.warn(`Gemini rate limited (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+
+      // Not retryable or out of retries — classify and throw user-friendly error
+      classifyAndThrow(err);
+    }
+  }
+
+  // Should never reach here, but just in case
+  throw new GeminiUserError('Failed to get a response from the AI after multiple attempts.');
+}
 
 // ------------------------------------------------
 // Phase 1 — Context Extraction & Case Classification
@@ -174,33 +288,26 @@ Rules:
 // ------------------------------------------------
 
 export async function analyzeCase(base64PDF: string): Promise<Phase1Result> {
-  const result = await model.generateContent([
-    {
-      inlineData: {
-        mimeType: 'application/pdf',
-        data: base64PDF,
-      },
+  const pdfPart = {
+    inlineData: {
+      mimeType: 'application/pdf' as const,
+      data: base64PDF,
     },
-    { text: PHASE_1_PROMPT },
-  ]);
+  };
 
+  const result = await callWithRetry([pdfPart, { text: PHASE_1_PROMPT }]);
   const text = result.response.text();
   const parsed = parseJsonResponse<Phase1Result>(text);
 
   if (!parsed) {
     // Retry once with explicit instruction
-    const retry = await model.generateContent([
-      {
-        inlineData: {
-          mimeType: 'application/pdf',
-          data: base64PDF,
-        },
-      },
+    const retry = await callWithRetry([
+      pdfPart,
       { text: PHASE_1_PROMPT + '\n\nCRITICAL: Return ONLY valid JSON. No markdown code fences, no explanation text.' },
     ]);
     const retryParsed = parseJsonResponse<Phase1Result>(retry.response.text());
     if (!retryParsed) {
-      throw new Error('Failed to parse Phase 1 response from Gemini after retry.');
+      throw new GeminiUserError('Failed to parse the AI response. Please try uploading again.');
     }
     return retryParsed;
   }
@@ -214,33 +321,25 @@ export async function solveCaseWithContext(
   answers: ClarifyingAnswer[]
 ): Promise<Phase2Solution> {
   const prompt = buildPhase2Prompt(phase1, answers);
-
-  const result = await model.generateContent([
-    {
-      inlineData: {
-        mimeType: 'application/pdf',
-        data: base64PDF,
-      },
+  const pdfPart = {
+    inlineData: {
+      mimeType: 'application/pdf' as const,
+      data: base64PDF,
     },
-    { text: prompt },
-  ]);
+  };
 
+  const result = await callWithRetry([pdfPart, { text: prompt }]);
   const text = result.response.text();
   const parsed = parseJsonResponse<Phase2Solution>(text);
 
   if (!parsed) {
-    const retry = await model.generateContent([
-      {
-        inlineData: {
-          mimeType: 'application/pdf',
-          data: base64PDF,
-        },
-      },
+    const retry = await callWithRetry([
+      pdfPart,
       { text: prompt + '\n\nCRITICAL: Return ONLY valid JSON. No markdown code fences, no explanation text.' },
     ]);
     const retryParsed = parseJsonResponse<Phase2Solution>(retry.response.text());
     if (!retryParsed) {
-      throw new Error('Failed to parse Phase 2 response from Gemini after retry.');
+      throw new GeminiUserError('Failed to parse the AI solution. Please try again.');
     }
     return retryParsed;
   }

@@ -98,7 +98,14 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Analyze case error:', error);
-    const message = error instanceof Error ? error.message : 'An unexpected error occurred';
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    // Only expose user-friendly GeminiUserError messages to the client
+    const isGeminiError = error instanceof Error && error.name === 'GeminiUserError';
+    const statusCode = isGeminiError && 'statusCode' in error ? (error as { statusCode: number }).statusCode : 500;
+    const message = isGeminiError
+      ? (error as Error).message
+      : 'An unexpected error occurred while analyzing the case. Please try again.';
+
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }
