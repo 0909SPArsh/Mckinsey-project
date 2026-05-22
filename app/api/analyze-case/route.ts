@@ -11,10 +11,23 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   try {
     // Auth guard — verify user is authenticated
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    let user = null;
+    try {
+      const supabase = await createClient();
+      const { data, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        console.error('Auth getUser error:', authError.message);
+      }
+      user = data?.user ?? null;
+    } catch (authErr) {
+      console.error('Auth guard exception:', authErr);
+    }
+
     if (!user) {
-      return NextResponse.json({ error: 'Authentication required. Please sign in.' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Authentication required. Please sign in.' },
+        { status: 401 }
+      );
     }
 
     const formData = await req.formData();
