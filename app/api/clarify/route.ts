@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import { solveCaseWithContext } from '@/lib/gemini';
 import { getSession, updateSession } from '@/lib/sessionStore';
 import type { ClarifyingAnswer, Phase1Result } from '@/types/case';
@@ -9,6 +10,13 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
+    // Auth guard — verify user is authenticated
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required. Please sign in.' }, { status: 401 });
+    }
+
     const body = await req.json();
     const { sessionId, clarifyingAnswers } = body as {
       sessionId: string;

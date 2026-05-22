@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import UploadZone from '@/components/UploadZone';
-import type { Phase1Result } from '@/types/case';
+import { createClient } from '@/lib/supabase/client';
+import type { User } from '@supabase/supabase-js';
 
 const CASE_TYPES = [
   { label: 'Profitability Problem', icon: '📉', color: 'border-red-500/20 text-red-400 bg-red-500/5' },
@@ -16,11 +17,26 @@ const CASE_TYPES = [
 export default function HomePage() {
   const router = useRouter();
   const [error, setError] = useState('');
+  const [user, setUser] = useState<User | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+  }, []);
 
   const handleUploadComplete = (sessionId: string, phase1: unknown) => {
-    // Store phase1 data in sessionStorage for instant display on the next page
     sessionStorage.setItem(`case-${sessionId}`, JSON.stringify(phase1));
     router.push(`/case/${sessionId}`);
+  };
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
   };
 
   return (
@@ -29,6 +45,54 @@ export default function HomePage() {
       <div className="absolute inset-0 bg-grid pointer-events-none" />
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-[#c9a84c]/[0.03] rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-[500px] h-[400px] bg-[#3b82f6]/[0.03] rounded-full blur-[100px] pointer-events-none" />
+
+      {/* User header bar */}
+      {user && (
+        <div className="absolute top-0 left-0 right-0 z-20">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#c9a84c] to-[#e8d48b] flex items-center justify-center">
+                <svg className="w-4 h-4 text-[#0a0f1e]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <span className="font-mono text-xs text-[#c9a84c] tracking-widest uppercase hidden sm:inline">CaseCoach AI</span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* User info */}
+              <div className="flex items-center gap-2.5 px-3 py-1.5 bg-white/[0.03] border border-white/[0.06] rounded-full">
+                {user.user_metadata?.avatar_url ? (
+                  <img
+                    src={user.user_metadata.avatar_url}
+                    alt=""
+                    className="w-6 h-6 rounded-full"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-[#c9a84c]/20 flex items-center justify-center">
+                    <span className="text-xs text-[#c9a84c] font-medium">
+                      {(user.email?.[0] || 'U').toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                <span className="text-sm text-[#8896ab] hidden sm:inline max-w-[160px] truncate">
+                  {user.user_metadata?.full_name || user.email}
+                </span>
+              </div>
+
+              {/* Sign out button */}
+              <button
+                onClick={handleSignOut}
+                disabled={signingOut}
+                className="px-3 py-1.5 text-xs font-mono text-[#8896ab] hover:text-white bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.1] rounded-full transition-all duration-200 cursor-pointer disabled:opacity-50"
+              >
+                {signingOut ? 'Signing out...' : 'Sign out'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 py-20">
         {/* Logo / Brand */}
