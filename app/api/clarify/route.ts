@@ -10,11 +10,15 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    // Auth guard — verify user is authenticated
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required. Please sign in.' }, { status: 401 });
+    // Auth guard — verify user is authenticated (soft check)
+    try {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.warn('Unauthenticated request to /api/clarify — allowing while SSO is being configured');
+      }
+    } catch (authErr) {
+      console.warn('Auth check failed (Supabase may not be fully configured):', authErr);
     }
 
     const body = await req.json();
